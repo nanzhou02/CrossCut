@@ -1,12 +1,12 @@
 # CrossCut
 
-This is the official PyTorch implementation for our **AAAI 2026 paper(oral): "CrossCut: Cross-Patch Aware Interactive Segmentation \\for Remote Sensing Images"**.
+This is the official PyTorch implementation for our **AAAI 2026 paper (oral): "CrossCut: Cross-Patch Aware Interactive Segmentation for Remote Sensing Images"**.
 
 ---
 
 ## 🚀 Status: Code Coming Soon!
 
-> [!IMPORTANT]
+> !IMPORTANT
 > **We are currently cleaning up and optimizing the codebase to ensure readability, usability, and reproducibility.**
 >
 > We will release the full source code, pre-trained models, detailed running instructions, and dependency files as soon as possible.
