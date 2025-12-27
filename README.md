@@ -30,25 +30,25 @@ CrossCut is a novel interactive segmentation framework designed for remote sensi
     pip install -r requirements.txt
 
 # 🚀 Usage
-    Before training and evaluation, please download the datasets and models, and then configure the path in config.yml.
+Before training and evaluation, please download the datasets and models, and then configure the path in config.yml.
 
-    1. Training
+1. Training
 
-        We the ViT-B [SimpleClick](https://github.com/uncbiag/SimpleClick) model trained on COCO+LVIS datasets as our base model. (click to download: [ViT-Base](https://drive.google.com/file/d/10i-7TQh0o_L50S4VanEfZCJ5fpdjGTAo/view?usp=sharing)) 
+    We the ViT-B [SimpleClick](https://github.com/uncbiag/SimpleClick) model trained on COCO+LVIS datasets as our base model. (click to download: [ViT-Base](https://drive.google.com/file/d/10i-7TQh0o_L50S4VanEfZCJ5fpdjGTAo/view?usp=sharing)) 
 
-        To train the model:
+    To train the model:
 
-        python train.py models/iter_mask/plainvit_base448_crosscut.py \
-        --weights=./weights/cocolvis_vit_base.pth \
-        --ngpus=4 \
-        --batch-size=8 
+    python train.py models/iter_mask/plainvit_base448_crosscut.py \
+    --weights=./weights/cocolvis_vit_base.pth \
+    --ngpus=4 \
+    --batch-size=8 
 
 
-    2. Evaluation
+2. Evaluation
 
-        To evaluate with pre-trained model:
+    To evaluate with pre-trained model:
 
-        python scripts/evaluate_model.py NoBRS --checkpoint=./weights/CrossCut.pth --datasets=iSAID,DeepGlobe,Inria --merge --gpu=0 
+    python scripts/evaluate_model.py NoBRS --checkpoint=./weights/CrossCut.pth --datasets=iSAID,DeepGlobe,Inria --merge --gpu=0 
 
 
 ## Download 
