@@ -51,8 +51,8 @@ class DeepglobeEvaluationDataset(ISDataset):
                 mask = cv2.resize(mask,self.whole_size,interpolation=cv2.INTER_NEAREST)
                 slices=[(0,0),(1,0),(0,1),(1,1)]
                 random.shuffle(slices)
-                slice_images=[image[n[0]*self.patch_size:(n[0]+1)*self.patch_size, n[1]*self.patch_size:(n[1]+1)*self.patch_size,:] for n in slices]
-                slice_masks=[mask[n[0]*self.patch_size:(n[0]+1)*self.patch_size, n[1]*self.patch_size:(n[1]+1)*self.patch_size] for n in slices]
+                slice_images=[image[n[0]*self.patch_size[0]:(n[0]+1)*self.patch_size[0], n[1]*self.patch_size[1]:(n[1]+1)*self.patch_size[1],:] for n in slices]
+                slice_masks=[mask[n[0]*self.patch_size[0]:(n[0]+1)*self.patch_size[0], n[1]*self.patch_size[1]:(n[1]+1)*self.patch_size[1]] for n in slices]
                 for slice_image,slice_mask in zip(slice_images,slice_masks):
                     if not np.all(slice_mask==0):
                         mask=cv2.resize(slice_mask, self.whole_size, interpolation=cv2.INTER_NEAREST)
