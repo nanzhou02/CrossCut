@@ -1,5 +1,4 @@
-import torch
-
+import jittor as jt
 from typing import List
 from isegm.inference.clicker import Click
 from isegm.utils.misc import get_bbox_iou, get_bbox_from_mask, expand_bbox, clamp_bbox
@@ -73,11 +72,11 @@ class ZoomIn(BaseTransform):
 
         assert prob_map.shape[0] == 1
         rmin, rmax, cmin, cmax = self._object_roi
-        prob_map = torch.nn.functional.interpolate(prob_map, size=(rmax - rmin + 1, cmax - cmin + 1),
+        prob_map = jt.nn.interpolate(prob_map, size=(rmax - rmin + 1, cmax - cmin + 1),
                                                    mode='bilinear', align_corners=True)
 
         if self._prev_probs is not None:
-            new_prob_map = torch.zeros(*self._prev_probs.shape, device=prob_map.device, dtype=prob_map.dtype)
+            new_prob_map = jt.zeros(*self._prev_probs.shape, dtype=prob_map.dtype)
             new_prob_map[:, :, rmin:rmax + 1, cmin:cmax + 1] = prob_map
         else:
             new_prob_map = prob_map
@@ -156,9 +155,9 @@ def get_roi_image_nd(image_nd, object_roi, target_size):
         new_height = int(round(height * scale))
         new_width = int(round(width * scale))
 
-    with torch.no_grad():
+    with jt.no_grad():
         roi_image_nd = image_nd[:, :, rmin:rmax + 1, cmin:cmax + 1]
-        roi_image_nd = torch.nn.functional.interpolate(roi_image_nd, size=(new_height, new_width),
+        roi_image_nd = jt.nn.interpolate(roi_image_nd, size=(new_height, new_width),
                                                        mode='bilinear', align_corners=True)
 
     return roi_image_nd

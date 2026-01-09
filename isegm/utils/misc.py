@@ -1,4 +1,4 @@
-import torch
+import jittor as jt
 import numpy as np
 
 from .log import logger
@@ -29,7 +29,7 @@ def save_checkpoint(net, checkpoints_path, epoch=None, prefix='', verbose=True, 
         logger.info(f'Save checkpoint to {str(checkpoint_path)}')
 
     net = net.module if multi_gpu else net
-    torch.save({'state_dict': net.state_dict(),
+    jt.save({'state_dict': net.state_dict(),
                 'config': net._config}, str(checkpoint_path))
 
 

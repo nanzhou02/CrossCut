@@ -1,7 +1,11 @@
-import torch
-import torch.nn.functional as F
-from torchvision import transforms
+# import torch
+# import torch.nn.functional as F
+import jittor as jt
+import jittor.transform as transform
+import numpy as np
+
 from isegm.inference.transforms import AddHorizontalFlip, SigmoidForPred, LimitLongestSide
+
 
 class BasePredictor(object):
     def __init__(self, model, device,
@@ -28,7 +32,7 @@ class BasePredictor(object):
         else:
             self.net = model
 
-        self.to_tensor = transforms.ToTensor()
+        self.to_tensor = transform.ToTensor()
 
         self.transforms = [zoom_in] if zoom_in is not None else []
         if max_size is not None:
@@ -38,13 +42,14 @@ class BasePredictor(object):
             self.transforms.append(AddHorizontalFlip())
 
     def set_input_image(self, image):
-        image_nd = self.to_tensor(image)
+        image_nd = self.to_tensor(image).transpose(2, 0, 1)
+        image_nd = jt.array(image_nd)
         for transform in self.transforms:
             transform.reset()
-        self.original_image = image_nd.to(self.device)
+        self.original_image = image_nd
         if len(self.original_image.shape) == 3:
             self.original_image = self.original_image.unsqueeze(0)
-        self.prev_prediction = torch.zeros_like(self.original_image[:, :1, :, :])
+        self.prev_prediction = jt.zeros_like(self.original_image[:, :1, :, :])
 
     def get_prediction(self, clicker, prev_mask=None):
         clicks_list = clicker.get_clicks()
@@ -59,60 +64,56 @@ class BasePredictor(object):
         if prev_mask is None:
             prev_mask = self.prev_prediction
         if hasattr(self.net, 'with_prev_mask') and self.net.with_prev_mask:
-            input_image = torch.cat((input_image, prev_mask), dim=1)
+            input_image = jt.concat((input_image, prev_mask), dim=1)
         image_nd, clicks_lists, is_image_changed = self.apply_transforms(
             input_image, [clicks_list]
         )
 
         pred_logits = self._get_prediction(image_nd, clicks_lists, is_image_changed)
-        
-        prediction = F.interpolate(pred_logits, mode='bilinear', align_corners=True,
-                                   size=image_nd.size()[2:])
-        
+
+        prediction = jt.nn.interpolate(pred_logits, mode='bilinear', align_corners=True,
+                                       size=image_nd.size()[2:])
+
         for t in reversed(self.transforms):
             prediction = t.inv_transform(prediction)
-        
-        # if self.zoom_in is not None and self.zoom_in.check_possible_recalculation():
-        #     return self.get_prediction(clicker)
+
 
         self.prev_prediction = prediction
         return prediction.cpu().numpy()[0, 0]
-    
-    def set_merge_mask(self):
-        self.if_merge=True
 
-    def set_slice_num(self,slice_num=0):
+    def set_merge_mask(self):
+        self.if_merge = True
+
+    def set_slice_num(self, slice_num=0):
         self.slice_num = slice_num
 
     def _get_prediction(self, image_nd, clicks_lists, is_image_changed):
         points_nd = self.get_points_nd(clicks_lists)
-
+        points_nd_2 = points_nd.copy()
         if self.if_merge:
             mask_2 = self.net(image_nd, points_nd, 2)['instances']
-            mask_3 = self.net(image_nd, points_nd, 3)['instances']
-            mask_list=[]
+            mask_3 = self.net(image_nd, points_nd_2, 3)['instances']
+            mask_list = []
             for i in range(image_nd.shape[0]):
-                mask=self.net(image_nd[i:i+1,:,:,:], points_nd[i:i+1,:,:], 4)['instances']
+                mask = self.net(image_nd[i:i + 1, :, :, :], points_nd[i:i + 1, :, :], 4)['instances']
                 mask_list.append(mask)
-            mask_4=torch.cat(mask_list, dim=0)
-            merged_mask = (mask_2 + mask_3 + mask_4)/3.0
+            mask_4 = jt.concat(mask_list, dim=0)
+            merged_mask = (mask_2 + mask_3 + mask_4) / 3.0
 
             return merged_mask
-        
-        if self.slice_num is not None and self.slice_num>0:
-            if self.slice_num>3:
-                mask_list=[]
+
+        if self.slice_num is not None and self.slice_num > 0:
+            if self.slice_num > 3:
+                mask_list = []
                 for i in range(image_nd.shape[0]):
-                    mask3=self.net(image_nd[i:i+1,:,:,:], points_nd[i:i+1,:,:], self.slice_num)['instances']
+                    mask3 = self.net(image_nd[i:i + 1, :, :, :], points_nd[i:i + 1, :, :], self.slice_num)['instances']
                     mask_list.append(mask3)
-                mask=torch.cat(mask_list, dim=0)
+                mask = jt.concat(mask_list, dim=0)
                 return mask
             else:
                 return self.net(image_nd, points_nd, self.slice_num)['instances']
 
-        
         return self.net(image_nd, points_nd)['instances']
-        
 
     def _get_transform_states(self):
         return [x.get_state() for x in self.transforms]
@@ -141,7 +142,6 @@ class BasePredictor(object):
         num_max_points = max(1, num_max_points)
 
         for clicks_list in clicks_lists:
-
             clicks_list = clicks_list[:self.net_clicks_limit]
             pos_clicks = [click.coords_and_indx for click in clicks_list if click.is_positive]
             pos_clicks = pos_clicks + (num_max_points - len(pos_clicks)) * [(-1, -1, -1)]
@@ -150,7 +150,7 @@ class BasePredictor(object):
             neg_clicks = neg_clicks + (num_max_points - len(neg_clicks)) * [(-1, -1, -1)]
             total_clicks.append(pos_clicks + neg_clicks)
 
-        return torch.tensor(total_clicks, device=self.device)
+        return jt.array(total_clicks)
 
     def get_states(self):
         return {
@@ -161,5 +161,3 @@ class BasePredictor(object):
     def set_states(self, states):
         self._set_transform_states(states['transform_states'])
         self.prev_prediction = states['prev_prediction']
-        
-        

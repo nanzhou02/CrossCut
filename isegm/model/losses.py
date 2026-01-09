@@ -1,10 +1,7 @@
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
+import jittor
+import jittor.nn as nn
 from isegm.utils import misc
-
 
 class NormalizedFocalLossSigmoid(nn.Module):
     def __init__(self, axis=-1, alpha=0.25, gamma=2, max_mult=-1, eps=1e-12,
@@ -27,45 +24,47 @@ class NormalizedFocalLossSigmoid(nn.Module):
         self._k_sum = 0
         self._m_max = 0
 
-    def forward(self, pred, label):
+    def execute(self, pred, label):
         one_hot = label > 0.5
         sample_weight = label != self._ignore_label
 
         if not self._from_logits:
-            pred = torch.sigmoid(pred)
+            pred = jittor.sigmoid(pred)
 
-        alpha = torch.where(one_hot, self._alpha * sample_weight, (1 - self._alpha) * sample_weight)
-        pt = torch.where(sample_weight, 1.0 - torch.abs(label - pred), torch.ones_like(pred))
+        alpha = jittor.where(one_hot, self._alpha * sample_weight, (1 - self._alpha) * sample_weight)
+        pt = jittor.where(sample_weight, 1.0 - jittor.abs(label - pred), jittor.ones_like(pred))
 
         beta = (1 - pt) ** self._gamma
 
-        sw_sum = torch.sum(sample_weight, dim=(-2, -1), keepdim=True)
-        beta_sum = torch.sum(beta, dim=(-2, -1), keepdim=True)
+        sw_sum = jittor.sum(sample_weight, dims=(-2, -1), keepdims=True)
+        beta_sum = jittor.sum(beta, dims=(-2, -1), keepdims=True)
         mult = sw_sum / (beta_sum + self._eps)
         if self._detach_delimeter:
             mult = mult.detach()
         beta = beta * mult
         if self._max_mult > 0:
-            beta = torch.clamp_max(beta, self._max_mult)
+            beta = jittor.clamp_max(beta, self._max_mult)
 
-        with torch.no_grad():
-            ignore_area = torch.sum(label == self._ignore_label, dim=tuple(range(1, label.dim()))).cpu().numpy()
-            sample_mult = torch.mean(mult, dim=tuple(range(1, mult.dim()))).cpu().numpy()
+        with jittor.no_grad():
+            ignore_area = jittor.sum(label == self._ignore_label, dims=tuple(range(1, label.dim()))).cpu().numpy()
+            sample_mult = jittor.mean(mult, dims=tuple(range(1, mult.dim()))).cpu().numpy()
             if np.any(ignore_area == 0):
                 self._k_sum = 0.9 * self._k_sum + 0.1 * sample_mult[ignore_area == 0].mean()
 
-                beta_pmax, _ = torch.flatten(beta, start_dim=1).max(dim=1)
+                # beta_pmax, _ = jittor.flatten(beta, start_dim=1).max(dim=1)
+                beta_pmax = jittor.flatten(beta, start_dim=1).max(dim=1)
                 beta_pmax = beta_pmax.mean().item()
                 self._m_max = 0.8 * self._m_max + 0.2 * beta_pmax
 
-        loss = -alpha * beta * torch.log(torch.min(pt + self._eps, torch.ones(1, dtype=torch.float).to(pt.device)))
+        # loss = -alpha * beta * jittor.log(jittor.min(pt + self._eps, jittor.ones(1, dtype=jittor.float).to(pt.device)))
+        loss = -alpha * beta * jittor.log(jittor.minimum(pt + self._eps, jittor.ones(1, dtype=jittor.float)))
         loss = self._weight * (loss * sample_weight)
 
         if self._size_average:
-            bsum = torch.sum(sample_weight, dim=misc.get_dims_with_exclusion(sample_weight.dim(), self._batch_axis))
-            loss = torch.sum(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis)) / (bsum + self._eps)
+            bsum = jittor.sum(sample_weight, dims=misc.get_dims_with_exclusion(sample_weight.dim(), self._batch_axis))
+            loss = jittor.sum(loss, dims=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis)) / (bsum + self._eps)
         else:
-            loss = torch.sum(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis))
+            loss = jittor.sum(loss, dims=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis))
 
         return loss
 
@@ -94,26 +93,26 @@ class FocalLoss(nn.Module):
         self._eps = eps
         self._size_average = size_average
 
-    def forward(self, pred, label, sample_weight=None):
+    def execute(self, pred, label, sample_weight=None):
         one_hot = label > 0.5
         sample_weight = label != self._ignore_label
 
         if not self._from_logits:
-            pred = torch.sigmoid(pred)
+            pred = jittor.sigmoid(pred)
 
-        alpha = torch.where(one_hot, self._alpha * sample_weight, (1 - self._alpha) * sample_weight)
-        pt = torch.where(sample_weight, 1.0 - torch.abs(label - pred), torch.ones_like(pred))
+        alpha = jittor.where(one_hot, self._alpha * sample_weight, (1 - self._alpha) * sample_weight)
+        pt = jittor.where(sample_weight, 1.0 - jittor.abs(label - pred), jittor.ones_like(pred))
 
         beta = (1 - pt) ** self._gamma
 
-        loss = -alpha * beta * torch.log(torch.min(pt + self._eps, torch.ones(1, dtype=torch.float).to(pt.device)))
+        loss = -alpha * beta * jittor.log(jittor.min(pt + self._eps, jittor.ones(1, dtype=jittor.float).to(pt.device)))
         loss = self._weight * (loss * sample_weight)
 
         if self._size_average:
-            tsum = torch.sum(sample_weight, dim=misc.get_dims_with_exclusion(label.dim(), self._batch_axis))
-            loss = torch.sum(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis)) / (tsum + self._eps)
+            tsum = jittor.sum(sample_weight, dim=misc.get_dims_with_exclusion(label.dim(), self._batch_axis))
+            loss = jittor.sum(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis)) / (tsum + self._eps)
         else:
-            loss = torch.sum(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis))
+            loss = jittor.sum(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis))
 
         return self._scale * loss
 
@@ -124,15 +123,15 @@ class SoftIoU(nn.Module):
         self._from_sigmoid = from_sigmoid
         self._ignore_label = ignore_label
 
-    def forward(self, pred, label):
+    def execute(self, pred, label):
         label = label.view(pred.size())
         sample_weight = label != self._ignore_label
 
         if not self._from_sigmoid:
-            pred = torch.sigmoid(pred)
+            pred = jittor.sigmoid(pred)
 
-        loss = 1.0 - torch.sum(pred * label * sample_weight, dim=(1, 2, 3)) \
-            / (torch.sum(torch.max(pred, label) * sample_weight, dim=(1, 2, 3)) + 1e-8)
+        loss = 1.0 - jittor.sum(pred * label * sample_weight, dim=(1, 2, 3)) \
+            / (jittor.sum(jittor.max(pred, label) * sample_weight, dim=(1, 2, 3)) + 1e-8)
 
         return loss
 
@@ -145,27 +144,27 @@ class SigmoidBinaryCrossEntropyLoss(nn.Module):
         self._weight = weight if weight is not None else 1.0
         self._batch_axis = batch_axis
 
-    def forward(self, pred, label):
+    def execute(self, pred, label):
         label = label.view(pred.size())
         sample_weight = label != self._ignore_label
-        label = torch.where(sample_weight, label, torch.zeros_like(label))
+        label = jittor.where(sample_weight, label, jittor.zeros_like(label))
 
         if not self._from_sigmoid:
-            loss = torch.relu(pred) - pred * label + F.softplus(-torch.abs(pred))
+            loss = jittor.relu(pred) - pred * label + nn.softplus(-jittor.abs(pred))
         else:
             eps = 1e-12
-            loss = -(torch.log(pred + eps) * label
-                     + torch.log(1. - pred + eps) * (1. - label))
+            loss = -(jittor.log(pred + eps) * label
+                     + jittor.log(1. - pred + eps) * (1. - label))
 
         loss = self._weight * (loss * sample_weight)
-        return torch.mean(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis))
+        return jittor.mean(loss, dim=misc.get_dims_with_exclusion(loss.dim(), self._batch_axis))
 
 
 class BinaryDiceLoss(nn.Module):
     """ Dice Loss for binary segmentation
     """
 
-    def forward(self, pred, label):
+    def execute(self, pred, label):
         batchsize = pred.size(0)
 
         # convert probability to binary label using maximum probability
@@ -181,15 +180,15 @@ class BinaryDiceLoss(nn.Module):
         target_label = target_label.view(batchsize, -1)
 
         # compute dice score
-        intersect = torch.sum(input_pred * target_label, 1)
-        input_area = torch.sum(input_pred * input_pred, 1)
-        target_area = torch.sum(target_label * target_label, 1)
+        intersect = jittor.sum(input_pred * target_label, 1)
+        input_area = jittor.sum(input_pred * input_pred, 1)
+        target_area = jittor.sum(target_label * target_label, 1)
 
         sum = input_area + target_area
-        epsilon = torch.tensor(1e-6)
+        epsilon = jittor.tensor(1e-6)
 
         # batch dice loss and ignore dice loss where target area = 0
-        batch_loss = torch.tensor(1.0) - (torch.tensor(2.0) * intersect + epsilon) / (sum + epsilon)
+        batch_loss = jittor.tensor(1.0) - (jittor.tensor(2.0) * intersect + epsilon) / (sum + epsilon)
         loss = batch_loss.mean()
 
         return loss

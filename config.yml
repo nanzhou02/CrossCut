@@ -1,9 +1,8 @@
 INTERACTIVE_MODELS_PATH: "./weights"
-EXPS_PATH: "../experiments_cc"
+EXPS_PATH: "../experiments"
 
 # Train and Evaluation datasets
 ISAID_PATH: "../datasets/iSAID"
 DOTA_PATH: "../datasets/DOTA-1.0"
 DEEPGLOBE_PATH: "../datasets/DeepGlobe"
 INRIA_PATH: "../datasets/AerialImageDataset"
-

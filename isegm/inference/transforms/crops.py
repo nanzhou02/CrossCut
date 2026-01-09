@@ -1,6 +1,6 @@
 import math
 
-import torch
+import jittor as jt
 import numpy as np
 from typing import List
 
@@ -36,8 +36,8 @@ class Crops(BaseTransform):
                 self._counts[dy:dy + self.crop_height, dx:dx + self.crop_width] += 1
                 image_crop = image_nd[:, :, dy:dy + self.crop_height, dx:dx + self.crop_width]
                 image_crops.append(image_crop)
-        image_crops = torch.cat(image_crops, dim=0)
-        self._counts = torch.tensor(self._counts, device=image_nd.device, dtype=torch.float32)
+        image_crops = jt.concat(image_crops, dim=0)
+        self._counts = jt.array(self._counts, dtype=jt.float32)
 
         clicks_list = clicks_lists[0]
         clicks_lists = []
@@ -52,15 +52,15 @@ class Crops(BaseTransform):
         if self._counts is None:
             return prob_map
 
-        new_prob_map = torch.zeros((1, 1, *self._counts.shape),
-                                   dtype=prob_map.dtype, device=prob_map.device)
+        new_prob_map = jt.zeros((1, 1, *self._counts.shape),
+                                   dtype=prob_map.dtype)
 
         crop_indx = 0
         for dy in self.y_offsets:
             for dx in self.x_offsets:
                 new_prob_map[0, 0, dy:dy + self.crop_height, dx:dx + self.crop_width] += prob_map[crop_indx, 0]
                 crop_indx += 1
-        new_prob_map = torch.div(new_prob_map, self._counts)
+        new_prob_map = jt.div(new_prob_map, self._counts)
 
         return new_prob_map
 

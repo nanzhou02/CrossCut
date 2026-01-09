@@ -1,4 +1,4 @@
-import torch
+import jittor as jt
 import math
 from isegm.utils.log import logger
 import isegm.utils.lr_decay as lrd
@@ -19,9 +19,9 @@ def get_optimizer(model, opt_name, opt_kwargs):
         params.append(param_group)
 
     optimizer = {
-        'sgd': torch.optim.SGD,
-        'adam': torch.optim.Adam,
-        'adamw': torch.optim.AdamW
+        'sgd': jt.optim.SGD,
+        'adam': jt.optim.Adam,
+        'adamw': jt.optim.AdamW
     }[opt_name.lower()](params, **opt_kwargs)
 
     return optimizer
@@ -34,9 +34,9 @@ def get_optimizer_with_layerwise_decay(model, opt_name, opt_kwargs):
         layer_decay=0.75
     )
     optimizer = {
-        'sgd': torch.optim.SGD,
-        'adam': torch.optim.Adam,
-        'adamw': torch.optim.AdamW
+        'sgd': jt.optim.SGD,
+        'adam': jt.optim.Adam,
+        'adamw': jt.optim.AdamW
     }[opt_name.lower()](param_groups, **opt_kwargs)
 
     return optimizer

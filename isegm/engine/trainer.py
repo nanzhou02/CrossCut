@@ -5,18 +5,35 @@ from copy import deepcopy
 from collections import defaultdict
 
 import cv2
-import torch
+import jittor as jt
 import numpy as np
 from tqdm import tqdm
-from torch.utils.data import DataLoader
+from jittor.dataset import DataLoader
 
 from isegm.utils.log import logger, TqdmToLogger, SummaryWriterAvg
 from isegm.utils.vis import draw_probmap, draw_points
 from isegm.utils.misc import save_checkpoint
 from isegm.utils.serialization import get_config_repr
-from isegm.utils.distributed import get_dp_wrapper, get_sampler, reduce_loss_dict
+#from isegm.utils.distributed import get_dp_wrapper, get_sampler, reduce_loss_dict
 from .optimizer import get_optimizer, get_optimizer_with_layerwise_decay
 
+def get_sampler(dataset, shuffle, distributed):
+    if shuffle:
+        return jt.dataset.RandomSampler(dataset)
+    else:
+        return jt.dataset.SequentialSampler(dataset)
+
+class set_grad_enabled:
+    def __init__(self, requires_grad):
+        self.requires_grad = requires_grad
+        self._ctx = None
+
+    def __enter__(self):
+        self._ctx = jt.enable_grad() if self.requires_grad else jt.no_grad()
+        return self._ctx.__enter__()
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._ctx.__exit__(exc_type, exc, tb)
 
 class ISTrainer(object):
     def __init__(self, model, cfg, model_cfg, loss_cfg,
@@ -73,16 +90,16 @@ class ISTrainer(object):
         logger.info(f'Dataset of {valset.get_samples_number()} samples was loaded for validation.')
 
         self.train_data = DataLoader(
-            trainset, cfg.batch_size,
+            trainset, batch_size=cfg.batch_size,
             sampler=get_sampler(trainset, shuffle=True, distributed=cfg.distributed),
-            drop_last=True, pin_memory=True,
+            drop_last=True,
             num_workers=cfg.workers
         )
 
         self.val_data = DataLoader(
-            valset, cfg.val_batch_size,
+            valset, batch_size=cfg.val_batch_size,
             sampler=get_sampler(valset, shuffle=False, distributed=cfg.distributed),
-            drop_last=True, pin_memory=True,
+            drop_last=True,
             num_workers=cfg.workers
         )
 
@@ -100,8 +117,7 @@ class ISTrainer(object):
             logger.info(model)
             logger.info(get_config_repr(model._config))
 
-        self.device = cfg.device
-        self.net = model.to(self.device)
+        self.net = model
         self.lr = optimizer_params['lr']
 
         if lr_scheduler is not None:
@@ -116,7 +132,7 @@ class ISTrainer(object):
             for click_model in self.click_models:
                 for param in click_model.parameters():
                     param.requires_grad = False
-                click_model.to(self.device)
+                #click_model.to(self.device)
                 click_model.eval()
 
     def run(self, num_epochs, start_epoch=None, validation=True):
@@ -148,18 +164,17 @@ class ISTrainer(object):
         self.net.train()
         train_loss = 0.0
         for i, batch_data in enumerate(tbar):
-            
-            global_step = epoch * len(self.train_data) + i
 
+            global_step = epoch * len(self.train_data) + i
             loss, losses_logging, splitted_batch_data, outputs = \
                 self.batch_forward(batch_data)
 
             self.optim.zero_grad()
-            loss.backward()
-            self.optim.step()
+            self.optim.backward(loss)
+            self.optim.step(loss)
 
             losses_logging['overall'] = loss
-            reduce_loss_dict(losses_logging)
+            #reduce_loss_dict(losses_logging)
 
             train_loss += losses_logging['overall'].item()
 
@@ -177,7 +192,7 @@ class ISTrainer(object):
                     self.save_visualization(splitted_batch_data, outputs, global_step, prefix='train')
 
                 self.sw.add_scalar(tag=f'{log_prefix}States/learning_rate',
-                                   value=self.lr if not hasattr(self, 'lr_scheduler') else self.lr_scheduler.get_lr()[-1],
+                                   value=self.lr if not hasattr(self, 'lr_scheduler') else self.lr_scheduler.get_lr(),
                                    global_step=global_step)
 
                 tbar.set_description(f'Epoch {epoch}, training loss {train_loss/(i+1):.4f}')
@@ -226,7 +241,7 @@ class ISTrainer(object):
                 self.batch_forward(batch_data, validation=True)
 
             batch_losses_logging['overall'] = loss
-            reduce_loss_dict(batch_losses_logging)
+            #reduce_loss_dict(batch_losses_logging)
             for loss_name, loss_value in batch_losses_logging.items():
                 losses_logging[loss_name].append(loss_value.item())
 
@@ -250,16 +265,17 @@ class ISTrainer(object):
         metrics = self.val_metrics if validation else self.train_metrics
         losses_logging = dict()
 
-        with torch.set_grad_enabled(not validation):
-            batch_data = {k: v.to(self.device) for k, v in batch_data.items()}
+        with set_grad_enabled(not validation):
+            batch_data = {k: v for k, v in batch_data.items()}
             image, gt_mask, points = batch_data['images'], batch_data['instances'], batch_data['points']
+
             orig_image, orig_gt_mask, orig_points = image.clone(), gt_mask.clone(), points.clone()
 
-            prev_output = torch.zeros_like(image, dtype=torch.float32)[:, :1, :, :]
+            prev_output = jt.zeros_like(image, dtype=jt.float32)[:, :1, :, :]
 
             last_click_indx = None
 
-            with torch.no_grad():
+            with jt.no_grad():
                 num_iters = random.randint(0, self.max_num_next_clicks)
 
                 for click_indx in range(num_iters):
@@ -273,8 +289,8 @@ class ISTrainer(object):
                     else:
                         eval_model = self.click_models[click_indx]
 
-                    net_input = torch.cat((image, prev_output), dim=1) if self.net.with_prev_mask else image
-                    prev_output = torch.sigmoid(eval_model(net_input, points)['instances'])
+                    net_input = jt.concat((image, prev_output), dim=1) if self.net.with_prev_mask else image
+                    prev_output = jt.sigmoid(eval_model(net_input, points)['instances'])
 
                     points = get_next_points(prev_output, orig_gt_mask, points, click_indx + 1)
 
@@ -283,12 +299,13 @@ class ISTrainer(object):
 
                 if self.net.with_prev_mask and self.prev_mask_drop_prob > 0 and last_click_indx is not None:
                     zero_mask = np.random.random(size=prev_output.size(0)) < self.prev_mask_drop_prob
-                    prev_output[zero_mask] = torch.zeros_like(prev_output[zero_mask])
+                    prev_output[zero_mask] = jt.zeros_like(prev_output[zero_mask])
 
 
             batch_data['points'] = points
 
-            net_input = torch.cat((image, prev_output), dim=1) if self.net.with_prev_mask else image
+            net_input = jt.concat((image, prev_output), dim=1) if self.net.with_prev_mask else image
+
             output = self.net(net_input, points)
 
             loss = 0.0
@@ -297,8 +314,9 @@ class ISTrainer(object):
             loss = self.add_loss('instance_aux_loss', loss, losses_logging, validation,
                                  lambda: (output['instances_aux'], batch_data['instances']))
 
+
             if self.is_master:
-                with torch.no_grad():
+                with jt.no_grad():
                     for m in metrics:
                         m.update(*(output.get(x) for x in m.pred_outputs),
                                  *(batch_data[x] for x in m.gt_outputs))
@@ -310,7 +328,7 @@ class ISTrainer(object):
         if loss_weight > 0.0:
             loss_criterion = loss_cfg.get(loss_name)
             loss = loss_criterion(*lambda_loss_inputs())
-            loss = torch.mean(loss)
+            loss = jt.mean(loss)
             losses_logging[loss_name] = loss
             loss = loss_weight * loss
             total_loss = total_loss + loss
@@ -335,7 +353,7 @@ class ISTrainer(object):
         instance_masks = splitted_batch_data['instances']
 
         gt_instance_masks = instance_masks.cpu().numpy()
-        predicted_instance_masks = torch.sigmoid(outputs['instances']).detach().cpu().numpy()
+        predicted_instance_masks = jt.sigmoid(outputs['instances']).detach().cpu().numpy()
         points = points.detach().cpu().numpy()
 
         image_blob, points = images[0], points[0]
@@ -416,8 +434,8 @@ def get_next_points(pred, gt, points, click_indx, pred_thresh=0.49):
 
 def load_weights(model, path_to_weights):
     current_state_dict = model.state_dict()
-    new_state_dict = torch.load(path_to_weights, map_location='cpu',weights_only=False)['state_dict']    
+    new_state_dict = jt.load(path_to_weights)['state_dict']
     current_state_dict.update(new_state_dict)
-    msg = model.load_state_dict(current_state_dict,strict=False)
+    msg = model.load_state_dict(current_state_dict)
     print(msg)
 

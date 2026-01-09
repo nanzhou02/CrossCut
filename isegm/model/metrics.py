@@ -1,4 +1,4 @@
-import torch
+import jittor
 import numpy as np
 
 from isegm.utils import misc
@@ -44,9 +44,11 @@ class AdaptiveIoU(TrainMetric):
     def update(self, pred, gt):
         gt_mask = gt > 0.5
         if self._from_logits:
-            pred = torch.sigmoid(pred)
+            pred = jittor.sigmoid(pred)
 
-        gt_mask_area = torch.sum(gt_mask, dim=(1, 2)).detach().cpu().numpy()
+        gt_mask_area = jittor.sum(gt_mask, dims=(1, 2)).detach().numpy()
+        # gt_mask_area = jittor.ops.reduce_add_(gt_mask, dims=[1, 2]).detach().numpy()
+
         if np.all(gt_mask_area == 0):
             return
 
@@ -85,11 +87,11 @@ class AdaptiveIoU(TrainMetric):
 
 def _compute_iou(pred_mask, gt_mask, ignore_mask=None, keep_ignore=False):
     if ignore_mask is not None:
-        pred_mask = torch.where(ignore_mask, torch.zeros_like(pred_mask), pred_mask)
+        pred_mask = jittor.where(ignore_mask, jittor.zeros_like(pred_mask), pred_mask)
 
     reduction_dims = misc.get_dims_with_exclusion(gt_mask.dim(), 0)
-    union = torch.mean((pred_mask | gt_mask).float(), dim=reduction_dims).detach().cpu().numpy()
-    intersection = torch.mean((pred_mask & gt_mask).float(), dim=reduction_dims).detach().cpu().numpy()
+    union = jittor.mean((pred_mask | gt_mask).float(), dims=reduction_dims).detach().cpu().numpy()
+    intersection = jittor.mean((pred_mask & gt_mask).float(), dims=reduction_dims).detach().cpu().numpy()
     nonzero = union > 0
 
     iou = intersection[nonzero] / union[nonzero]

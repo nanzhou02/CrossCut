@@ -12,3 +12,5 @@ mmcv==1.6.2
 timm==0.6.11
 Cython==0.29.32
 tqdm
+jittor
+einops

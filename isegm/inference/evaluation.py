@@ -1,7 +1,7 @@
 from time import time
 
 import numpy as np
-import torch
+import jittor as jt
 from isegm.inference import utils
 from isegm.inference.clicker import Clicker
 
@@ -37,22 +37,22 @@ def evaluate_sample(image, gt_mask, predictor, max_iou_thr,
     pred_mask = np.zeros_like(gt_mask)
     ious_list = []
 
-    with torch.no_grad():
+    with jt.no_grad():
         predictor.set_input_image(image)
 
         for click_indx in range(max_clicks):
             clicker.make_next_click(pred_mask)
+
             pred_probs = predictor.get_prediction(clicker)
-            pred_mask = pred_probs > pred_thr
+            pred_mask = (pred_probs > pred_thr)
 
             if callback is not None:
                 callback(image, gt_mask, pred_probs, sample_id, click_indx, clicker.clicks_list)
 
             iou = utils.get_iou(gt_mask, pred_mask)
-            ious_list.append(iou)           
-
+            ious_list.append(iou)
             if iou >= max_iou_thr and click_indx + 1 >= min_clicks:
                 break
         
-        return clicker.clicks_list, np.array(ious_list, dtype=np.float32), pred_probs
+        return clicker.clicks_list, np.array(ious_list, dtype=np.float32), None
     

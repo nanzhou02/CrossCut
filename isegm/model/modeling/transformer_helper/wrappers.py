@@ -1,9 +1,10 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import warnings
 
-import torch.nn as nn
-import torch.nn.functional as F
-
+# import torch.nn as nn
+# import torch.nn.functional as F
+import jittor as jt
+import jittor.nn as nn
 
 def resize(input,
            size=None,
@@ -24,7 +25,7 @@ def resize(input,
                         'the output would more aligned if '
                         f'input size {(input_h, input_w)} is `x+1` and '
                         f'out size {(output_h, output_w)} is `nx+1`')
-    return F.interpolate(input, size, scale_factor, mode, align_corners)
+    return nn.interpolate(input, size, scale_factor, mode, align_corners)
 
 
 class Upsample(nn.Module):

@@ -1,5 +1,5 @@
 from .base import BaseTransform
-import torch
+import jittor as jt
 
 class Resize(BaseTransform):
     def __init__(self, target_size=400):
@@ -16,7 +16,7 @@ class Resize(BaseTransform):
         self.scale_h = self.target_size / H
         self.scale_w = self.target_size / W
 
-        image_resized = torch.nn.functional.interpolate(
+        image_resized = jt.nn.interpolate(
             image_nd, size=(self.target_size, self.target_size),
             mode='bilinear', align_corners=True
         )
@@ -34,7 +34,7 @@ class Resize(BaseTransform):
         if self._input_shape is None:
             return prob_map
 
-        return torch.nn.functional.interpolate(
+        return jt.nn.interpolate(
             prob_map, size=self._input_shape,
             mode='bilinear', align_corners=True
         )

@@ -2,7 +2,11 @@ import os
 import argparse
 import importlib.util
 
-import torch
+import jittor as jt
+
+jt.flags.lazy_execution = 1
+
+
 from isegm.utils.exp import init_experiment
 
 
@@ -15,11 +19,10 @@ def main():
 
     model_base_name = getattr(model_script, 'MODEL_NAME', None)
 
-    args.distributed = 'WORLD_SIZE' in os.environ
+    args.distributed = False
     cfg = init_experiment(args, model_base_name)
 
-    torch.backends.cudnn.benchmark = True
-    torch.multiprocessing.set_sharing_strategy('file_system')
+
 
     model_script.main(cfg)
 
@@ -47,7 +50,7 @@ def parse_args():
 
     parser.add_argument('--gpus', type=str, default='', required=False,
                         help='Ids of used GPUs. You should use either this argument or "--ngpus".')
-    
+
     parser.add_argument('--resume-exp', type=str, default=None,
                         help='The prefix of the name of the experiment to be continued. '
                              'If you use this field, you must specify the "--resume-prefix" argument.')
@@ -68,13 +71,13 @@ def parse_args():
     parser.add_argument("--local_rank", type=int, default=0)
 
     # parameters for experimenting
-    parser.add_argument('--layerwise-decay', action='store_true', 
+    parser.add_argument('--layerwise-decay', action='store_true',
                         help='layer wise decay for transformer blocks.')
 
-    parser.add_argument('--upsample', type=str, default='x1', 
+    parser.add_argument('--upsample', type=str, default='x1',
                         help='upsample the output.')
 
-    parser.add_argument('--random-split', action='store_true', 
+    parser.add_argument('--random-split', action='store_true',
                         help='random split the patch instead of window split.')
 
     return parser.parse_args()

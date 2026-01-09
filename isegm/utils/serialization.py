@@ -1,7 +1,7 @@
 from functools import wraps
 from copy import deepcopy
 import inspect
-import torch.nn as nn
+import jittor.nn as nn
 
 
 def serialize(init):

@@ -74,7 +74,7 @@ model_name_mapper = {'sbd_vitb_epoch_54_NoBRS': 'Ours-ViT-B (SBD)',
                      'sbd_cdnet_resnet34_CDNet': 'CDNet-ResNet-34 (SBD)',
                      'cocolvis_cdnet_resnet34_CDNet': 'CDNet-ResNet-34 (C+L)'
 }
-
+print
 color_style_mapper = {'Ours-ViT-B (SBD)': ('#0000ff',   '-'),
                       'Ours-ViT-L (SBD)': ('#008000',   '-'),
                       'Ours-ViT-H (SBD)': ('#ff0000',   '-'),

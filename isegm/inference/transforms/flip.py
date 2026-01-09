@@ -1,4 +1,4 @@
-import torch
+import jittor as jt
 
 from typing import List
 from isegm.inference.clicker import Click
@@ -8,7 +8,7 @@ from .base import BaseTransform
 class AddHorizontalFlip(BaseTransform):
     def transform(self, image_nd, clicks_lists: List[List[Click]]):
         assert len(image_nd.shape) == 4
-        image_nd = torch.cat([image_nd, torch.flip(image_nd, dims=[3])], dim=0)
+        image_nd = jt.concat([image_nd, jt.flip(image_nd, dim=[3])], dim=0)
 
         image_width = image_nd.shape[3]
         clicks_lists_flipped = []
@@ -25,7 +25,7 @@ class AddHorizontalFlip(BaseTransform):
         num_maps = prob_map.shape[0] // 2
         prob_map, prob_map_flipped = prob_map[:num_maps], prob_map[num_maps:]
 
-        return 0.5 * (prob_map + torch.flip(prob_map_flipped, dims=[3]))
+        return 0.5 * (prob_map + jt.flip(prob_map_flipped, dim=[3]))
 
     def get_state(self):
         return None

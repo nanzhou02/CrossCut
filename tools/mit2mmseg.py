@@ -4,7 +4,8 @@ import os.path as osp
 from collections import OrderedDict
 
 import mmcv
-import torch
+#import torch
+import jittor as jt
 from mmcv.runner import CheckpointLoader
 
 
@@ -29,7 +30,7 @@ def convert_mit(ckpt):
             if 'attn.q.' in new_k:
                 sub_item_k = k.replace('q.', 'kv.')
                 new_k = new_k.replace('q.', 'attn.in_proj_')
-                new_v = torch.cat([v, ckpt[sub_item_k]], dim=0)
+                new_v = jt.concat([v, ckpt[sub_item_k]], dim=0)
             elif 'attn.kv.' in new_k:
                 continue
             elif 'attn.proj.' in new_k:
@@ -75,7 +76,7 @@ def main():
         state_dict = checkpoint
     weight = convert_mit(state_dict)
     mmcv.mkdir_or_exist(osp.dirname(args.dst))
-    torch.save(weight, args.dst)
+    jt.save(weight, args.dst)
 
 
 if __name__ == '__main__':

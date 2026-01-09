@@ -4,10 +4,10 @@ import argparse
 from pathlib import Path
 
 import cv2
-import torch
+import jittor as jt
+jt.flags.lazy_execution = 1
+jt.flags.use_cuda = 1
 import numpy as np
-
-
 sys.path.insert(0, '.')
 from isegm.inference import utils
 from isegm.utils.exp import load_config_file
@@ -33,7 +33,8 @@ def parse_args():
                                    help='The relative path to the experiment with checkpoints.'
                                         '(relative to cfg.EXPS_PATH)')
 
-    parser.add_argument('--datasets', type=str, default='GrabCut,Berkeley,DAVIS,PascalVOC,SBD,BraTS,ssTEM,OAIZIB,COCO_MVal',
+    parser.add_argument('--datasets', type=str,
+                        default='GrabCut,Berkeley,DAVIS,PascalVOC,SBD,BraTS,ssTEM,OAIZIB,COCO_MVal',
                         help='List of datasets on which the model should be tested. '
                              'Datasets are separated by a comma. Possible choices: '
                              'GrabCut, Berkeley, DAVIS, SBD, PascalVOC')
@@ -70,19 +71,18 @@ def parse_args():
                         help='The path to the config file.')
     parser.add_argument('--logs-path', type=str, default='',
                         help='The path to the evaluation logs. Default path: cfg.EXPS_PATH/evaluation_logs.')
-    parser.add_argument('--merge',action='store_true',default=False) #ZN add
-    parser.add_argument('--resize-param', type=int, default=896,    
-                        help='the size of resized image')       #ZN add
-    parser.add_argument('--slice-num', type=int, default=0,    
-                        help='the number of image slice')       #ZN add
-    
-    
+    parser.add_argument('--merge', action='store_true', default=False)  #ZN add
+    parser.add_argument('--resize-param', type=int, default=896,
+                        help='the size of resized image')  #ZN add
+    parser.add_argument('--slice-num', type=int, default=0,
+                        help='the number of image slice')  #ZN add
+
     args = parser.parse_args()
     if args.cpu:
-        args.device = torch.device('cpu')
+        jt.flags.use_cuda = 0
     else:
-        args.device = torch.device(f"cuda:{args.gpus.split(',')[0]}")
-        
+        jt.flags.use_cuda = 1
+    args.device = None
 
     if (args.iou_analysis or args.print_ious) and args.min_n_clicks <= 1:
         args.target_iou = 1.01
@@ -114,16 +114,15 @@ def main():
         dataset = utils.get_dataset(dataset_name, cfg)
 
         for checkpoint_path in checkpoints_list:
-            model = utils.load_is_model(checkpoint_path, args.device, args.eval_ritm)
-            
+            model = utils.load_is_model(str(checkpoint_path), args.device, args.eval_ritm)
+
             # close zoom_in
-            predictor_params,_ = get_predictor_and_zoomin_params(args, dataset_name, eval_ritm=args.eval_ritm)  
+            predictor_params, _ = get_predictor_and_zoomin_params(args, dataset_name, eval_ritm=args.eval_ritm)
 
             # For SimpleClick models, we usually need to interpolate the positional embedding
             if not args.eval_ritm:
-                interpolate_pos_embed_inference(model.backbone, (448,448), args.device)
+                interpolate_pos_embed_inference(model.backbone, (448, 448), args.device)
 
-            
             predictor = get_predictor(model, args.mode, args.device,
                                       prob_thresh=args.thresh,
                                       predictor_params=predictor_params,
@@ -131,23 +130,23 @@ def main():
                                       resize_params=args.resize_param)
             if args.merge:
                 predictor.set_merge_mask()
-            if args.slice_num>0:
+            if args.slice_num > 0:
                 predictor.set_slice_num(args.slice_num)
-            
+
             vis_callback = get_prediction_vis_callback(logs_path, dataset_name, args.thresh) if args.vis_preds else None
-            
+
             dataset_results = evaluate_dataset(dataset, predictor, pred_thr=args.thresh,
                                                max_iou_thr=args.target_iou,
                                                min_clicks=args.min_n_clicks,
                                                max_clicks=args.n_clicks,
                                                callback=vis_callback)
-                
+
             row_name = args.mode if single_model_eval else checkpoint_path.stem
             if args.iou_analysis:
                 save_iou_analysis_data(args, dataset_name, logs_path,
                                        logs_prefix, dataset_results,
                                        model_name=args.model_name)
-        
+
             save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_results,
                          save_ious=single_model_eval and args.save_ious,
                          single_model_eval=single_model_eval,
@@ -158,6 +157,7 @@ def main():
     # print("torch.cuda.memory_allocated: %fGB"%(torch.cuda.memory_allocated(0)/1024/1024/1024))
     # print("torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(0)/1024/1024/1024))
     # print("torch.cuda.max_memory_reserved: %fGB"%(torch.cuda.max_memory_reserved(0)/1024/1024/1024))
+
 
 def get_predictor_and_zoomin_params(args, dataset_name, apply_zoom_in=True, eval_ritm=False):
     predictor_params = {}
@@ -241,7 +241,8 @@ def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_r
     mean_spc, mean_spi = utils.get_time_metrics(all_ious, elapsed_time)
 
     iou_thrs = np.arange(0.7, min(0.95, args.target_iou) + 0.001, 0.05).tolist()
-    noc_list, noc_list_std, over_max_list = utils.compute_noc_metric(all_ious, iou_thrs=iou_thrs, max_clicks=args.n_clicks)
+    noc_list, noc_list_std, over_max_list = utils.compute_noc_metric(all_ious, iou_thrs=iou_thrs,
+                                                                     max_clicks=args.n_clicks)
 
     # print(noc_list, noc_list_std)
 
@@ -261,11 +262,10 @@ def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_r
         target_iou_int = int(args.target_iou * 100)
         if target_iou_int not in [70, 75, 80]:
             noc_list, _, over_max_list = utils.compute_noc_metric(all_ious, iou_thrs=[args.target_iou],
-                                                               max_clicks=args.n_clicks)
+                                                                  max_clicks=args.n_clicks)
             table_row += f' NoC@{args.target_iou:.1%} = {noc_list[0]:.2f};'
             table_row += f' >={args.n_clicks}@{args.target_iou:.1%} = {over_max_list[0]}'
 
-    
     if print_header:
         print(header)
     print(table_row)
@@ -321,8 +321,8 @@ def get_prediction_vis_callback(logs_path, dataset_name, prob_thresh):
         sample_path = save_path / f'{sample_id}_{click_indx}.jpg'
         prob_map = draw_probmap(pred_probs)
         image_with_mask = draw_with_blend_and_clicks(image, pred_probs > prob_thresh, clicks_list=clicks_list)
-        
-        gt_mask=np.stack([gt_mask*255]*3,axis=-1)
+
+        gt_mask = np.stack([gt_mask * 255] * 3, axis=-1)
         cv2.imwrite(str(sample_path), np.concatenate((image_with_mask, prob_map, gt_mask), axis=1)[:, :, ::-1])
 
     return callback

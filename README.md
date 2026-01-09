@@ -1,4 +1,4 @@
-CrossCut
+CrossCut (Jittor)
 This is the official implementation for our AAAI 2026 Oral paper: "CrossCut: Cross-Patch Aware Interactive Segmentation for Remote Sensing Images".
 
 Note: The paper and citation details will be released shortly. Please stay tuned!
@@ -21,11 +21,11 @@ CrossCut is a novel interactive segmentation framework designed for remote sensi
     ## Clone the repository
     git clone https://github.com/nanzhou02/CrossCut.git
     cd CrossCut
-
+    
     ## Create a conda environment
     conda create -n crosscut python=3.8.8
     conda activate crosscut
-
+    
     ## Install dependencies
     pip install -r requirements.txt
 
@@ -40,19 +40,19 @@ Before training and evaluation, please download the datasets and models, and the
 
     python train.py models/iter_mask/plainvit_base448_crosscut.py \
     --weights=./weights/cocolvis_vit_base.pth \
-    --ngpus=4 \
-    --batch-size=8 
+    --ngpus=1 \
+    --batch-size=2
 
 
 2. Evaluation
 
     To evaluate with pre-trained model:
 
-    python scripts/evaluate_model.py NoBRS --checkpoint=./weights/CrossCut.pth --datasets=iSAID,DeepGlobe,Inria --merge --gpu=0 
+    python scripts/evaluate_model.py NoBRS --checkpoint=./weights/crosscut_jittor.pth --datasets=iSAID,DeepGlobe,Inria --merge --gpu=0 
 
 
 ## Download 
-CrossCut models: [Google Drive](https://drive.google.com/file/d/1zuyhtWhgir4HmXIJgk4i-8XWSR1ByVe2/view?usp=sharing)
+CrossCut jittor models: [Google Drive](https://drive.google.com/file/d/1csWJwG_E2u4vQ76drNwhZ8KtDEd_PrTH/view?usp=sharing)
 
 Inria dataset : [Google Drive](https://drive.google.com/file/d/1h_b2jIMpmIM0uO_jdSiBe14ofalW92wM/view?usp=sharing) 
 
@@ -77,5 +77,4 @@ Our project is developed based on [RITM](https://github.com/saic-vul/ritm_intera
 
 ## 📧 Contact
 For any inquiries, please contact: zhoun1468@gmail.com
-
 

@@ -1,17 +1,16 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from abc import ABCMeta, abstractmethod
 
-import torch
-import torch.nn as nn
-from mmcv.runner import BaseModule, auto_fp16, force_fp32
+import jittor
+import jittor.nn as nn
+# from mmcv.runner import BaseModule, auto_fp16, force_fp32
 
-from .builder import build_pixel_sampler, build_loss
+# from .builder import build_pixel_sampler, build_loss
 from .wrappers import resize
 from .accuracy import accuracy
 from .cross_entropy_loss import CrossEntropyLoss
 
-
-class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
+class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
     """Base class for BaseDecodeHead.
 
     Args:
@@ -61,7 +60,8 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
                  align_corners=False,
                  init_cfg=dict(
                      type='Normal', std=0.01, override=dict(name='conv_seg'))):
-        super(BaseDecodeHead, self).__init__(init_cfg)
+        # super(BaseDecodeHead, self).__init__(init_cfg)
+        self.init_cfg = init_cfg
         self._init_inputs(in_channels, in_index, input_transform)
         self.channels = channels
         self.num_classes = num_classes
@@ -150,7 +150,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
                     mode='bilinear',
                     align_corners=self.align_corners) for x in inputs
             ]
-            inputs = torch.cat(upsampled_inputs, dim=1)
+            inputs = jittor.cat(upsampled_inputs, dim=1)
         elif self.input_transform == 'multiple_select':
             inputs = [inputs[i] for i in self.in_index]
         else:
@@ -158,9 +158,9 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
 
         return inputs
 
-    @auto_fp16()
-    @abstractmethod
-    def forward(self, inputs):
+    # @auto_fp16()
+    # @abstractmethod
+    def execute(self, inputs):
         """Placeholder of forward function."""
         pass
 
@@ -199,7 +199,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             Tensor: Output segmentation map.
         """
-        return self.forward(inputs)
+        return self.execute(inputs)
 
     def cls_seg(self, feat):
         """Classify each pixel."""
@@ -208,10 +208,11 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         output = self.conv_seg(feat)
         return output
 
-    @force_fp32(apply_to=('seg_logit', ))
+    # @force_fp32(apply_to=('seg_logit', ))
     def losses(self, seg_logit, seg_label):
         """Compute segmentation loss."""
         loss = dict()
+        seg_logit = seg_logit.float()
         seg_logit = resize(
             input=seg_logit,
             size=seg_label.shape[2:],

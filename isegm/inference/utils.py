@@ -1,8 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
-import torch
+import jittor as jt
 import numpy as np
-
 
 from isegm.data.datasets import DeepglobeEvaluationDataset, iSAIDEvaluationDataset, InriaEvaluationDataset
 from isegm.utils.serialization import load_model
@@ -20,10 +19,10 @@ def get_time_metrics(all_ious, elapsed_time):
 
 def load_is_model(checkpoint, device, eval_ritm, **kwargs):
     if isinstance(checkpoint, (str, Path)):
-        state_dict = torch.load(checkpoint, map_location='cpu')
+        state_dict = jt.load(checkpoint)
     else:
         state_dict = checkpoint
-    
+
     if isinstance(state_dict, list):
         model = load_single_is_model(state_dict[0], device, eval_ritm, **kwargs)
         models = [load_single_is_model(x, device, eval_ritm, **kwargs) for x in state_dict]
@@ -33,12 +32,12 @@ def load_is_model(checkpoint, device, eval_ritm, **kwargs):
         return load_single_is_model(state_dict, device, eval_ritm, **kwargs)
 
 
-def load_single_is_model(state_dict, device, eval_ritm,**kwargs):
+def load_single_is_model(state_dict, device, eval_ritm, **kwargs):
     model = load_model(state_dict['config'], eval_ritm, **kwargs)
-    model.load_state_dict(state_dict['state_dict'], strict=False)
+    model.load_state_dict(state_dict['state_dict'])
     for param in model.parameters():
         param.requires_grad = False
-    model.to(device)
+
     model.eval()
 
     return model
@@ -46,11 +45,11 @@ def load_single_is_model(state_dict, device, eval_ritm,**kwargs):
 
 def get_dataset(dataset_name, cfg):
     if dataset_name == 'DeepGlobe':
-        dataset = DeepglobeEvaluationDataset(cfg.DEEPGLOBE_PATH,split='val')
+        dataset = DeepglobeEvaluationDataset(cfg.DEEPGLOBE_PATH, split='val')
     elif dataset_name == 'iSAID':
         dataset = iSAIDEvaluationDataset(cfg.ISAID_PATH, split='val')
     elif dataset_name == 'Inria':
-        dataset = InriaEvaluationDataset(cfg.INRIA_PATH, split='test')    
+        dataset = InriaEvaluationDataset(cfg.INRIA_PATH, split='test')
     else:
         dataset = None
 
@@ -117,7 +116,7 @@ def get_results_table(noc_list, over_max_list, brs_type, dataset_name, mean_spc,
                       n_clicks=20, model_name=None):
     table_header = (f'|{"BRS Type":^13}|{"Dataset":^11}|'
                     f'{"NoC@70%":^9}|{"NoC@75%":^9}|{"NoC@80%":^9}|'
-                    f'{">="+str(n_clicks)+"@75%":^9}|{">="+str(n_clicks)+"@80%":^9}|'
+                    f'{">=" + str(n_clicks) + "@75%":^9}|{">=" + str(n_clicks) + "@80%":^9}|'
                     f'{"SPC,s":^7}|{"Time":^9}|')
     row_width = len(table_header)
 

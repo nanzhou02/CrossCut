@@ -1,4 +1,4 @@
-import torch
+import jittor as jt
 
 
 class BaseTransform(object):
@@ -26,7 +26,7 @@ class SigmoidForPred(BaseTransform):
         return image_nd, clicks_lists
 
     def inv_transform(self, prob_map):
-        return torch.sigmoid(prob_map)
+        return jt.sigmoid(prob_map)
 
     def reset(self):
         pass

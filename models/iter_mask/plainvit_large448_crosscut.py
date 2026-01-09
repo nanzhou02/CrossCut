@@ -2,6 +2,7 @@ from isegm.utils.exp_imports.default import *
 from isegm.model.modeling.transformer_helper.cross_entropy_loss import CrossEntropyLoss
 
 MODEL_NAME = 'plainvit_large448_crosscut'
+import jittor as jt
 
 
 def main(cfg):
@@ -53,7 +54,7 @@ def init_model(cfg):
         slice_number=2
     )
 
-    model.to(cfg.device)
+
 
     return model, model_cfg
 
@@ -153,7 +154,7 @@ def train(model, cfg, model_cfg):
         'lr': 5e-5, 'betas': (0.9, 0.999), 'eps': 1e-8
     }
 
-    lr_scheduler = partial(torch.optim.lr_scheduler.MultiStepLR,
+    lr_scheduler = partial(jt.lr_scheduler.MultiStepLR,
                            milestones=[50, 55], gamma=0.1)
     trainer = ISTrainer(model, cfg, model_cfg, loss_cfg,
                         trainset, valset,

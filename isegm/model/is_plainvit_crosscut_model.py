@@ -1,8 +1,8 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import jittor as jt
+import jittor.nn as nn
 import numpy as np
 from isegm.model.ops import BatchImageNormalize, ScaleLayer
+
 
 class DistMaps(nn.Module):
     def __init__(self, norm_radius, spatial_scale=1.0, cpu_mode=False, use_disks=False):
@@ -19,39 +19,37 @@ class DistMaps(nn.Module):
         else:
             num_points = points.shape[1] // 2
             points = points.view(-1, points.size(2))
-            points, points_order = torch.split(points, [2, 1], dim=1)
+            points, points_order = jt.split(points, [2, 1], dim=1)
 
-            invalid_points = torch.max(points, dim=1, keepdim=False)[0] < 0
-            row_array = torch.arange(start=0, end=rows, step=1, dtype=torch.float32, device=points.device)
-            col_array = torch.arange(start=0, end=cols, step=1, dtype=torch.float32, device=points.device)
+            invalid_points = jt.max(points, dim=1, keepdim=False) < 0
+            row_array = jt.arange(start=0, end=rows, step=1, dtype=jt.float32)
+            col_array = jt.arange(start=0, end=cols, step=1, dtype=jt.float32)
 
-            coord_rows, coord_cols = torch.meshgrid(row_array, col_array)
-            coords = torch.stack((coord_rows, coord_cols), dim=0).unsqueeze(0).repeat(points.size(0), 1, 1, 1)
+            coord_rows, coord_cols = jt.meshgrid(row_array, col_array)
+            coords = jt.stack([coord_rows, coord_cols], dim=0).unsqueeze(0).repeat(points.size(0), 1, 1, 1)
 
             add_xy = (points * self.spatial_scale).view(points.size(0), points.size(1), 1, 1)
-            coords.add_(-add_xy)
-            if not self.use_disks:
-                coords.div_(self.norm_radius * self.spatial_scale)
-            coords.mul_(coords)
 
+            coords -= add_xy
+            if not self.use_disks:
+                coords /= (self.norm_radius * self.spatial_scale)
+            coords *= coords  # 或 coords = coords * coords
             coords[:, 0] += coords[:, 1]
             coords = coords[:, :1]
 
             coords[invalid_points, :, :, :] = 1e6
-
-            coords = coords.view(-1, num_points, 1, rows, cols) #2B points 1 h w
-
+            coords = coords.view(-1, num_points, 1, rows, cols)  #2B points 1 h w
 
             ##########【ZN】##########
-            distance_map = coords.clone() # 2B points 1 h w
-            min_indices = distance_map.argmin(dim=1) # 2B 1 h w
-            min_indices = min_indices.view(-1, 2, rows, cols) # B 2 h w
+            distance_map = coords.clone()  # 2B points 1 h w
+            min_indices = distance_map.argmin(dim=1)[0]  # 2B 1 h w
+            min_indices = min_indices.view(-1, 2, rows, cols)  # B 2 h w
 
-            distance_map = distance_map.squeeze(2) # 2B points h w
-            seperate_coords = distance_map.view(-1, 2, num_points, rows, cols) # B 2 points h w
-            seperate_coords = (seperate_coords<= (self.norm_radius * self.spatial_scale) ** 2).float()
+            distance_map = distance_map.squeeze(2)  # 2B points h w
+            seperate_coords = distance_map.view(-1, 2, num_points, rows, cols)  # B 2 points h w
+            seperate_coords = (seperate_coords <= (self.norm_radius * self.spatial_scale) ** 2).float()
             #-------------------------#
-            coords = coords.min(dim=1)[0]  # -> (bs * num_masks * 2) x 1 x h x w
+            coords = coords.min(dim=1)  # -> (bs * num_masks * 2) x 1 x h x w
             coords = coords.view(-1, 2, rows, cols)  # B 2 h w
 
         if self.use_disks:
@@ -59,23 +57,31 @@ class DistMaps(nn.Module):
         else:
             coords.sqrt_().mul_(2).tanh_()
 
-
-        ##########【ZN】########## 
-        new_H, new_W = coords.shape[2] // n,  coords.shape[3]//n
+        ##########【ZN】##########
+        new_H, new_W = coords.shape[2] // n, coords.shape[3] // n
         B = coords.shape[0]
-        coords = coords.unfold(2, new_H, new_H).unfold(3, new_W, new_W).permute(0, 2, 3, 1, 4, 5).reshape(B,-1, 2, new_H, new_W)
-        min_indices = min_indices.unfold(2, new_H, new_H).unfold(3, new_W, new_W).permute(0, 2, 3, 1, 4, 5).reshape(B,-1, 2, new_H, new_W)
+        coords = jt.nn.unfold(coords, kernel_size=(new_H, new_W), stride=(new_H, new_W)).reshape(B, 2, new_H,
+                                                                                                 new_W, -1).permute(0,
+                                                                                                                    4,
+                                                                                                                    1,
+                                                                                                                    2,
+                                                                                                                    3)
+        min_indices = jt.nn.unfold(min_indices, kernel_size=(new_H, new_W), stride=(new_H, new_W)).reshape(B, 2, new_H,
+                                                                                                           new_W,
+                                                                                                           -1).permute(
+            0, 4, 1, 2, 3)
+
         #-------------------------#
 
         return coords, min_indices, seperate_coords
 
-    def forward(self, x, coords, n):
+    def execute(self, x, coords, n):
         return self.get_coord_features(coords, x.shape[0], x.shape[2], x.shape[3], n)
 
 
 class ISModel(nn.Module):
     def __init__(self, with_aux_output=False, norm_radius=5, use_disks=False, cpu_dist_maps=False,
-                 use_rgb_conv=False, use_leaky_relu=False, # the two arguments only used for RITM
+                 use_rgb_conv=False, use_leaky_relu=False,  # the two arguments only used for RITM
                  with_prev_mask=False, norm_mean_std=([.485, .456, .406], [.229, .224, .225]), slice_number=2):
         super().__init__()
 
@@ -99,40 +105,53 @@ class ISModel(nn.Module):
             ]
             self.maps_transform = nn.Sequential(*mt_layers)
         else:
-            self.maps_transform=nn.Identity()
+            self.maps_transform = nn.Identity()
 
         self.dist_maps = DistMaps(norm_radius=norm_radius, spatial_scale=1.0,
                                   cpu_mode=cpu_dist_maps, use_disks=use_disks)
 
-    def forward(self, image, points, slice_number=None):
+    def execute(self, image, points, slice_number=None):
+
         image, prev_mask = self.prepare_input(image)
         if slice_number is not None:
             self.slice_number = slice_number
         orig_image = image.clone()
-        
+
         n = self.slice_number
+
         target_size = 448 * n
         _, _, H, W = image.shape
         if H != target_size or W != target_size:
-            image = F.interpolate(image, size=(target_size, target_size), mode='bilinear', align_corners=False)
-            prev_mask = F.interpolate(prev_mask, size=(target_size, target_size), mode='nearest')
+            image = nn.interpolate(image, size=(target_size, target_size), mode='bilinear', align_corners=False)
+            prev_mask = nn.interpolate(prev_mask, size=(target_size, target_size), mode='nearest')
             points = self.resize_valid_points(points, (H, W), (target_size, target_size))
 
         inter_image = image.clone()
 
-        B, C, new_H, new_W = image.shape[0], image.shape[1], image.shape[2] // n,  image.shape[3] // n
-        image = image.unfold(2, new_H, new_H).unfold(3, new_W, new_W).permute(0, 2, 3, 1, 4, 5).reshape(B, n * n, C, new_H, new_W) 
-        prev_mask = prev_mask.unfold(2, new_H, new_H).unfold(3, new_W, new_W).permute(0, 2, 3, 1, 4, 5).reshape(B, n * n, 1, new_H, new_W)
+        B, C, new_H, new_W = image.shape[0], image.shape[1], image.shape[2] // n, image.shape[3] // n
+
+        image = jt.nn.unfold(image, kernel_size=(new_H, new_W), stride=(new_H, new_W)).reshape(B, C,
+                                                                                               new_H, new_W,
+                                                                                               n * n).permute(0, 4, 1,
+                                                                                                              2, 3)
+
+        prev_mask = jt.nn.unfold(prev_mask, kernel_size=(new_H, new_W), stride=(new_H, new_W)).reshape(B, 1, new_H,
+                                                                                                       new_W,
+                                                                                                       n * n).permute(0,
+                                                                                                                      4,
+                                                                                                                      1,
+                                                                                                                      2,
+                                                                                                                      3)
 
         coord_features, min_indices, seperate_coords = self.get_coord_features(inter_image, prev_mask, points)
         coord_features = self.maps_transform(coord_features)
         outputs = self.backbone_forward(image, coord_features, min_indices, seperate_coords)
 
-        outputs['instances'] = nn.functional.interpolate(outputs['instances'], size=orig_image.size()[2:],
-                                                         mode='bilinear', align_corners=True)
+        outputs['instances'] = nn.interpolate(outputs['instances'], size=orig_image.size()[2:],
+                                              mode='bilinear', align_corners=True)
         if self.with_aux_output:
-            outputs['instances_aux'] = nn.functional.interpolate(outputs['instances_aux'], size=orig_image.size()[2:],
-                                                             mode='bilinear', align_corners=True)
+            outputs['instances_aux'] = nn.interpolate(outputs['instances_aux'], size=orig_image.size()[2:],
+                                                      mode='bilinear', align_corners=True)
 
         return outputs
 
@@ -149,17 +168,17 @@ class ISModel(nn.Module):
         raise NotImplementedError
 
     def get_coord_features(self, image, prev_mask, points):
-        coord_features,min_indices,seperate_coords = self.dist_maps(image, points, self.slice_number)
+        coord_features, min_indices, seperate_coords = self.dist_maps(image, points, self.slice_number)
         if prev_mask is not None:
-            if prev_mask.dim()==4: 
-                coord_features = torch.cat((prev_mask, coord_features), dim=1)
-            elif prev_mask.dim()==5: 
-                coord_features = torch.cat((prev_mask, coord_features), dim=2)
+            if prev_mask.dim() == 4:
+                coord_features = jt.concat((prev_mask, coord_features), dim=1)
+            elif prev_mask.dim() == 5:
+                coord_features = jt.concat((prev_mask, coord_features), dim=2)
 
         return coord_features, min_indices, seperate_coords
-    
+
     def resize_valid_points(self, points, old_size, new_size, align_corners=False):
-        
+
         H_old, W_old = old_size
         H_new, W_new = new_size
 
@@ -186,7 +205,7 @@ class ISModel(nn.Module):
         return points
 
 
-def split_points_by_order(tpoints: torch.Tensor, groups):
+def split_points_by_order(tpoints: jt.array, groups):
     points = tpoints.cpu().numpy()
     num_groups = len(groups)
     bs = points.shape[0]
@@ -216,7 +235,7 @@ def split_points_by_order(tpoints: torch.Tensor, groups):
 
             group_points[group_id][bindx, new_point_indx, :] = point
 
-    group_points = [torch.tensor(x, dtype=tpoints.dtype, device=tpoints.device)
+    group_points = [jt.array(x, dtype=tpoints.dtype)
                     for x in group_points]
 
     return group_points
@@ -231,7 +250,7 @@ from .modeling.swin_transformer import SwinTransfomerSegHead
 class SimpleFPN(nn.Module):
     def __init__(self, in_dim=768, out_dims=[128, 256, 512, 1024]):
         super().__init__()
-        self.down_4_chan = max(out_dims[0]*2, in_dim // 2)
+        self.down_4_chan = max(out_dims[0] * 2, in_dim // 2)
         self.down_4 = nn.Sequential(
             nn.ConvTranspose2d(in_dim, self.down_4_chan, 2, stride=2),
             nn.GroupNorm(1, self.down_4_chan),
@@ -269,7 +288,7 @@ class SimpleFPN(nn.Module):
     def init_weights(self):
         pass
 
-    def forward(self, x):
+    def execute(self, x):
         x_down_4 = self.down_4(x)
         x_down_8 = self.down_8(x)
         x_down_16 = self.down_16(x)
@@ -281,21 +300,21 @@ class SimpleFPN(nn.Module):
 class PlainVitCrosscutModel(ISModel):
     @serialize
     def __init__(
-        self,
-        backbone_params={},
-        neck_params={}, 
-        head_params={},
-        random_split=False,
-        **kwargs
-        ):
+            self,
+            backbone_params={},
+            neck_params={},
+            head_params={},
+            random_split=False,
+            **kwargs
+    ):
 
         super().__init__(**kwargs)
         self.random_split = random_split
 
         self.patch_embed_coords = PatchEmbed(
-            img_size= backbone_params['img_size'],
-            patch_size=backbone_params['patch_size'], 
-            in_chans=3 if self.with_prev_mask else 2, 
+            img_size=backbone_params['img_size'],
+            patch_size=backbone_params['patch_size'],
+            in_chans=3 if self.with_prev_mask else 2,
             embed_dim=backbone_params['embed_dim'],
         )
 
@@ -311,89 +330,85 @@ class PlainVitCrosscutModel(ISModel):
 
     def backbone_forward(self, image, coord_features=None, nearest_click_idx_map=None, each_click_map=None):
 
-        C,H,W = image.shape[2],image.shape[3],image.shape[4]
+        C, H, W = image.shape[2], image.shape[3], image.shape[4]
         n = math.floor(math.sqrt(image.shape[1]))
         image_patches = image.view(-1, C, H, W)
 
-        with torch.no_grad():
-
+        with jt.no_grad():
             points_features = self.backbone.forward_backbone(image_patches, None, self.random_split)
-            B, N, C =points_features.shape
+            B, N, C = points_features.shape
             grid_size = self.backbone.patch_embed.grid_size
-            points_features = points_features.transpose(-1,-2).view(B, C, grid_size[0], grid_size[1])
+            points_features = points_features.transpose(-1, -2).view(B, C, grid_size[0], grid_size[1])
 
             points_features = (
-                points_features.view(-1, n, n, C, grid_size[0],grid_size[1])  # (B, n, n, C, h, w)
+                points_features.view(-1, n, n, C, grid_size[0], grid_size[1])  # (B, n, n, C, h, w)
                 .permute(0, 3, 1, 4, 2, 5)  # (B, C, n*h, n*w)
-                .reshape(-1, C, grid_size[0]*n, grid_size[1]*n)  
+                .reshape(-1, C, grid_size[0] * n, grid_size[1] * n)
             )
 
-            points_features = nn.functional.interpolate(points_features, size=(grid_size[0]*n*16, grid_size[1]*n*16), mode='bilinear') # B C H W
-            pos_click_map=each_click_map[:, 0, :, :, :] # B,P,H,W
-            positive_feature_list=[]
-            
+            points_features = nn.interpolate(points_features,
+                                             size=(int(grid_size[0] * 16 * n), int(grid_size[1] * 16 * n)),
+                                             mode='bilinear')  # B C H W
+
+            pos_click_map = each_click_map[:, 0, :, :, :]  # B,P,H,W
+            positive_feature_list = []
             for i in range(each_click_map.shape[2]):
-                positive_feature_list.append(self.get_mean_feature(points_features, pos_click_map[:, i:i+1, :, :])) ## B P W H
-            
-            positive_feature=torch.stack(positive_feature_list).repeat(1, n*n, 1) # P B*S C
-            
+                positive_feature_list.append(
+                    self.get_mean_feature(points_features, pos_click_map[:, i:i + 1, :, :]))  ## B P W H
+            positive_feature = jt.stack(positive_feature_list).repeat(1, n * n, 1)  # P B*S C
+
             nearest_click_idx_map = nearest_click_idx_map.view(-1, 2, H, W)  # B 2 H W
-            pos_nearest_click_idx_map = nearest_click_idx_map[:,0,:,:]   # B H W
-            
+            pos_nearest_click_idx_map = nearest_click_idx_map[:, 0, :, :]  # B H W
+
             B, H, W = pos_nearest_click_idx_map.shape
             P, BS, C = positive_feature.shape
 
             positive_feature = positive_feature.permute(1, 0, 2)  # (B*S, P, C)
             positive_feature_out = []
 
-            for i in range(BS):  
-                idx_map = pos_nearest_click_idx_map[i]  
-                feat_bank = positive_feature[i]         # (P, C)
+            for i in range(BS):
+                idx_map = pos_nearest_click_idx_map[i]
+                feat_bank = positive_feature[i]  # (P, C)
                 selected = feat_bank[idx_map].permute(2, 0, 1).unsqueeze(0)
-                selected = nn.functional.interpolate(selected, size=(grid_size[0], grid_size[1]), mode='bilinear').squeeze(0).permute(1, 2, 0)
+                selected = nn.interpolate(selected, size=(grid_size[0], grid_size[1]), mode='bilinear').squeeze(
+                    0).permute(1, 2, 0)
                 positive_feature_out.append(selected)
-            
-            positive_feature = torch.stack(positive_feature_out).permute(0, 3, 1, 2).flatten(2).transpose(1, 2)
 
-            pos_feature=positive_feature.detach().clone()
+            positive_feature = jt.stack(positive_feature_out).permute(0, 3, 1, 2).flatten(2).transpose(1, 2)
+
+            pos_feature = positive_feature.detach().clone()
 
         coord_features = coord_features.view(-1, 3, H, W)
         coord_features = self.patch_embed_coords(coord_features)
         coord_features += self.mlp_pos(pos_feature)
-        
+
         backbone_features = self.backbone.forward_backbone(image_patches, coord_features, self.random_split)
 
         # Extract 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
         B, N, C = backbone_features.shape
         grid_size = self.backbone.patch_embed.grid_size
 
-        backbone_features = backbone_features.transpose(-1,-2).view(B, C, grid_size[0], grid_size[1])
+        backbone_features = backbone_features.transpose(-1, -2).view(B, C, grid_size[0], grid_size[1])
         multi_scale_features = self.neck(backbone_features)
 
         instances = self.head(multi_scale_features)
-        C, H, W = instances.shape[1],instances.shape[2],instances.shape[3]
-        instances = instances.view(-1, n, n, C, H, W).permute(0, 3, 1, 4, 2, 5).reshape(-1, C, H*n, W*n)
+        C, H, W = instances.shape[1], instances.shape[2], instances.shape[3]
+        instances = instances.view(-1, n, n, C, H, W).permute(0, 3, 1, 4, 2, 5).reshape(-1, C, H * n, W * n)
 
         return {'instances': instances, 'instances_aux': None}
 
-    
     def get_mean_feature(self, feature, mask):
-        B, C, H, W = feature.shape
-        result = []
 
-        for b in range(B):
-            valid_coords = (mask[b, 0] > 0).nonzero(as_tuple=False)
-            if valid_coords.numel() == 0:
-                mean_feat =torch.zeros(C, device=feature.device, dtype=feature.dtype) 
-                result.append(mean_feat)
-                continue
+        m = mask.float()
 
-            y, x = valid_coords[:, 0], valid_coords[:, 1]  # (N,)
-            feats = feature[b, :, y, x]  # (C, N)
-            mean_feat = feats.mean(dim=1)  # (C,)
-            result.append(mean_feat)
+        sum_feat = (feature * m).sum(dims=(2, 3))
 
-        return torch.stack(result, dim=0)  # (B, C)
+        counts = m.sum(dims=(2, 3)).squeeze(1)
 
-    
+        den = counts.unsqueeze(1)
+        den = jt.where(den == 0, jt.ones_like(den), den)
+
+        mean = sum_feat / den
+
+        return mean  # (B, C)
 

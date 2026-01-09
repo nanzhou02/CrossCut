@@ -1,13 +1,14 @@
 import random
 import pickle
 import numpy as np
-import torch
-from torchvision import transforms
+#import torch
+import jittor as jt
+from jittor import transform
 from .points_sampler import MultiPointSampler
 from .sample import DSample
 
 
-class ISDataset(torch.utils.data.dataset.Dataset):
+class ISDataset(jt.dataset.Dataset):
     def __init__(self,
                  augmentator=None,
                  points_sampler=MultiPointSampler(max_num_points=12),
@@ -25,7 +26,7 @@ class ISDataset(torch.utils.data.dataset.Dataset):
         self.points_sampler = points_sampler
         self.with_image_info = with_image_info
         self.samples_precomputed_scores = self._load_samples_scores(samples_scores_path, samples_scores_gamma)
-        self.to_tensor = transforms.ToTensor()
+        self.to_tensor = transform.ToTensor()
 
         self.dataset_samples = None
 
@@ -46,7 +47,7 @@ class ISDataset(torch.utils.data.dataset.Dataset):
         mask = self.points_sampler.selected_mask
 
         output = {
-            'images': self.to_tensor(sample.image),
+            'images': self.to_tensor(sample.image).transpose(2, 0 ,1),
             'points': points.astype(np.float32),
             'instances': mask
         }

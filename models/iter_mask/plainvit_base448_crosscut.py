@@ -2,6 +2,7 @@ from isegm.utils.exp_imports.default import *
 from isegm.model.modeling.transformer_helper.cross_entropy_loss import CrossEntropyLoss
 
 MODEL_NAME = 'plainvit_base448_crosscut'
+import jittor as jt
 
 
 def main(cfg):
@@ -16,20 +17,19 @@ def init_model(cfg):
 
     backbone_params = dict(
         img_size=(448, 448),
-        patch_size=(16,16),
+        patch_size=(16, 16),
         in_chans=3,
         embed_dim=768,
         depth=12,
         num_heads=12,
-        mlp_ratio=4, 
+        mlp_ratio=4,
         qkv_bias=True,
     )
 
     neck_params = dict(
-        in_dim = 768,
-        out_dims = [128, 256, 512, 1024],
+        in_dim=768,
+        out_dims=[128, 256, 512, 1024],
     )
-
 
     head_params = dict(
         in_channels=[128, 256, 512, 1024],
@@ -39,7 +39,7 @@ def init_model(cfg):
         loss_decode=CrossEntropyLoss(),
         align_corners=False,
         upsample=cfg.upsample,
-        channels={'x1':256, 'x2': 128, 'x4': 64}[cfg.upsample]
+        channels={'x1': 256, 'x2': 128, 'x4': 64}[cfg.upsample]
     )
 
     model = PlainVitCrosscutModel(
@@ -53,8 +53,6 @@ def init_model(cfg):
         slice_number=2
     )
 
-    model.to(cfg.device)
-
     return model, model_cfg
 
 
@@ -67,7 +65,7 @@ def train(model, cfg, model_cfg):
     loss_cfg.instance_loss = NormalizedFocalLossSigmoid(alpha=0.5, gamma=2)
     loss_cfg.instance_loss_weight = 1.0
 
-    train_augmentator = Compose([          
+    train_augmentator = Compose([
         UniformRandomResize(scale_range=(0.75, 1.25)),
         Flip(),
         RandomRotate90(),
@@ -90,71 +88,68 @@ def train(model, cfg, model_cfg):
 
     trainset = ProportionalComposeDataset([
         iSAIDDataset(
-        cfg.ISAID_PATH,
-        split='train',
-        augmentator=train_augmentator,
-        keep_background_prob=0.05,
-        points_sampler=points_sampler,
-    ),
+            cfg.ISAID_PATH,
+            split='train',
+            augmentator=train_augmentator,
+            keep_background_prob=0.05,
+            points_sampler=points_sampler,
+        ),
 
         DeepglobeEvaluationDataset(
-        cfg.DEEPGLOBE_PATH,
-        split='train',
-        augmentator=train_augmentator,
-        keep_background_prob=0.05,
-        points_sampler=points_sampler,
-    ),
+            cfg.DEEPGLOBE_PATH,
+            split='train',
+            augmentator=train_augmentator,
+            keep_background_prob=0.05,
+            points_sampler=points_sampler,
+        ),
 
         InriaEvaluationDataset(
-        cfg.INRIA_PATH,
-        split='train',
-        augmentator=train_augmentator,
-        keep_background_prob=0.05,
-        points_sampler=points_sampler,
-    )
+            cfg.INRIA_PATH,
+            split='train',
+            augmentator=train_augmentator,
+            keep_background_prob=0.05,
+            points_sampler=points_sampler,
+        )
     ],
-        ratios=[0.4,0.3,0.3],
+        ratios=[0.4, 0.3, 0.3],
         augmentator=train_augmentator,
         keep_background_prob=0.05,
         points_sampler=points_sampler,
         epoch_len=4500
     )
 
-
     valset = ProportionalComposeDataset([
-        iSAIDDataset(
-        cfg.ISAID_PATH,
-        split='val',
-        augmentator=val_augmentator,
-        points_sampler=points_sampler,
-    ),
-
+            iSAIDDataset(
+            cfg.ISAID_PATH,
+            split='val',
+            augmentator=val_augmentator,
+            points_sampler=points_sampler,
+        ),
         DeepglobeEvaluationDataset(
-        cfg.DEEPGLOBE_PATH,
-        split='val',
-        augmentator=val_augmentator,
-        points_sampler=points_sampler,
-    ),
+            cfg.DEEPGLOBE_PATH,
+            split='val',
+            augmentator=val_augmentator,
+            points_sampler=points_sampler,
+        ),
 
-        InriaEvaluationDataset(
-        cfg.INRIA_PATH,
-        split='test',
-        augmentator=val_augmentator,
-        points_sampler=points_sampler,
-    )
+            InriaEvaluationDataset(
+            cfg.INRIA_PATH,
+            split='test',
+            augmentator=val_augmentator,
+            points_sampler=points_sampler,
+        )
     ],
-        ratios=[0.4,0.3,0.3],
+        ratios=[0.4, 0.3, 0.3],
         augmentator=val_augmentator,
         points_sampler=points_sampler,
         epoch_len=2000
     )
 
-
     optimizer_params = {
         'lr': 5e-5, 'betas': (0.9, 0.999), 'eps': 1e-8
     }
 
-    lr_scheduler = partial(torch.optim.lr_scheduler.MultiStepLR,
+    lr_scheduler = partial(jt.lr_scheduler.MultiStepLR,
                            milestones=[50, 55], gamma=0.1)
     trainer = ISTrainer(model, cfg, model_cfg, loss_cfg,
                         trainset, valset,
@@ -166,5 +161,5 @@ def train(model, cfg, model_cfg):
                         metrics=[AdaptiveIoU()],
                         max_interactive_points=model_cfg.num_max_points,
                         max_num_next_clicks=3)
-    
+
     trainer.run(num_epochs=55, validation=False)
