@@ -1,7 +1,7 @@
 CrossCut (Jittor)
 This is the official implementation for our AAAI 2026 Oral paper: "CrossCut: Cross-Patch Aware Interactive Segmentation for Remote Sensing Images".
 
-Note: The paper and citation details will be released shortly. Please stay tuned!
+The paper is available in the [AAAI 2026 proceedings](https://ojs.aaai.org/index.php/AAAI/article/view/37637).
 
 # 📢 News
 [2025-12]: The official code and pre-trained models are released!
@@ -54,7 +54,7 @@ Before training and evaluation, please download the datasets and models, and the
 ## Download 
 CrossCut jittor models: [Google Drive](https://drive.google.com/file/d/1csWJwG_E2u4vQ76drNwhZ8KtDEd_PrTH/view?usp=sharing)
 
-Inria dataset : [Google Drive](https://drive.google.com/file/d/1h_b2jIMpmIM0uO_jdSiBe14ofalW92wM/view?usp=sharing) 
+Inria dataset : [Baidu Netdisk](https://pan.baidu.com/s/1ptksXulHCI8Kv3Ar5ek4Cg?pwd=3qdq) (Extraction code: `3qdq`)
 
 DeepGlobe dataset : [Google Drive](https://drive.google.com/file/d/1U-4sTGeEQ8RN_Gqp-EiaU7i77I6mUVf7/view?usp=sharing)
 
@@ -66,9 +66,21 @@ The code is released under the MIT License. It is a short, permissive software l
 
 
 ## 📝 Citation
-The paper is not publicly available yet. We will update the BibTeX and arXiv link here as soon as the camera-ready version is released.
+If you find our work useful, please cite our paper:
 
-If you use this code in the meantime, please refer to this repository.
+```bibtex
+@article{lin2026crosscut,
+  title   = {{CrossCut: Cross-Patch Aware Interactive Segmentation for Remote Sensing Images}},
+  author  = {Lin, Zheng and Zhou, Nan and Wang, Yuhan and Zhang, Bojian},
+  journal = {Proceedings of the AAAI Conference on Artificial Intelligence},
+  year    = {2026},
+  volume  = {40},
+  number  = {9},
+  pages   = {7024--7032},
+  doi     = {10.1609/aaai.v40i9.37637},
+  url     = {https://ojs.aaai.org/index.php/AAAI/article/view/37637}
+}
+```
 
 
 ## Acknowledgement
@@ -77,4 +89,3 @@ Our project is developed based on [RITM](https://github.com/saic-vul/ritm_intera
 
 ## 📧 Contact
 For any inquiries, please contact: zhoun1468@gmail.com
-
