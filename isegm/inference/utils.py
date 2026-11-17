@@ -48,7 +48,7 @@ def get_dataset(dataset_name, cfg):
     if dataset_name == 'DeepGlobe':
         dataset = DeepglobeEvaluationDataset(cfg.DEEPGLOBE_PATH,split='val')
     elif dataset_name == 'iSAID':
-        dataset = iSAIDEvaluationDataset(cfg.ISAID_PATH, split='val')
+        dataset = iSAIDEvaluationDataset(cfg.ISAID_PATH, split='val', dota_path=cfg.DOTA_PATH)
     elif dataset_name == 'Inria':
         dataset = InriaEvaluationDataset(cfg.INRIA_PATH, split='test')    
     else:

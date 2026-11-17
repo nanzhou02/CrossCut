@@ -32,6 +32,15 @@ CrossCut is a novel interactive segmentation framework designed for remote sensi
 # 🚀 Usage
 Before training and evaluation, please download the datasets and models, and then configure the path in config.yml.
 
+For iSAID, `DOTA_PATH` is the image root: images are read from
+`<DOTA_PATH>/<split>/images`. `ISAID_PATH` is the annotation root:
+masks remain in `<ISAID_PATH>/<split>/Semantic_masks/images`, and evaluation
+caches remain in `<ISAID_PATH>/<split>_images_and_ids_list.pkl`.
+Both training scripts and evaluation use these settings. Direct loader calls
+can pass `dota_path=...`; omitting it preserves `../datasets/DOTA-1.0`.
+The second positional argument remains `split`. Relative paths are resolved
+from the working directory, as before.
+
 1. Training
 
     We the ViT-B [SimpleClick](https://github.com/uncbiag/SimpleClick) model trained on COCO+LVIS datasets as our base model. (click to download: [ViT-Base](https://drive.google.com/file/d/10i-7TQh0o_L50S4VanEfZCJ5fpdjGTAo/view?usp=sharing)) 
