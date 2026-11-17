@@ -1,4 +1,4 @@
-"""Path regression tests using real PNG IO, without the Jittor training runtime.
+"""Path regression tests using real PNG IO, without importing the training framework.
 
 Run with: python -m unittest discover -s tests -p test_isaid_paths.py -v
 """

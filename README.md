@@ -1,5 +1,9 @@
-CrossCut
+CrossCut (PyTorch)
 This is the official implementation for our AAAI 2026 Oral paper: "CrossCut: Cross-Patch Aware Interactive Segmentation for Remote Sensing Images".
+
+This branch contains the PyTorch implementation, based on the last PyTorch
+release (`909f06e`), with subsequent compatible fixes and documentation updates.
+The [`main` branch](https://github.com/nanzhou02/CrossCut/tree/main) contains the Jittor implementation.
 
 The paper is available in the [AAAI 2026 proceedings](https://ojs.aaai.org/index.php/AAAI/article/view/37637).
 
@@ -19,7 +23,7 @@ CrossCut is a novel interactive segmentation framework designed for remote sensi
 # 🛠️ Environment Setup
 
     ## Clone the repository
-    git clone https://github.com/nanzhou02/CrossCut.git
+    git clone --branch pytorch https://github.com/nanzhou02/CrossCut.git
     cd CrossCut
 
     ## Create a conda environment
@@ -61,7 +65,7 @@ from the working directory, as before.
 
 
 ## Download 
-CrossCut models: [Google Drive](https://drive.google.com/file/d/1zuyhtWhgir4HmXIJgk4i-8XWSR1ByVe2/view?usp=sharing)
+CrossCut PyTorch models (`CrossCut.pth`): [Google Drive](https://drive.google.com/file/d/1zuyhtWhgir4HmXIJgk4i-8XWSR1ByVe2/view?usp=sharing)
 
 Inria dataset : [Baidu Netdisk](https://pan.baidu.com/s/1ptksXulHCI8Kv3Ar5ek4Cg?pwd=3qdq) (Extraction code: `3qdq`)
 
@@ -69,6 +73,18 @@ DeepGlobe dataset : [Google Drive](https://drive.google.com/file/d/1U-4sTGeEQ8RN
 
 iSAID dataset : [official site](https://captain-whu.github.io/iSAID/)
 
+
+## Tests
+
+Run the path regression and PyTorch runtime checks from the repository root:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The runtime checks use synthetic images and a reduced-width model, including
+forward/backward passes and a checkpoint round trip; they do not require the
+downloaded weights or full datasets. CUDA checks run when CUDA is available.
 
 ## License
 The code is released under the MIT License. It is a short, permissive software license. Basically, you can do whatever you want as long as you include the original copyright and license notice in any copy of the software/source. 

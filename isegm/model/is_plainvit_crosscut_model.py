@@ -378,22 +378,11 @@ class PlainVitCrosscutModel(ISModel):
 
     
     def get_mean_feature(self, feature, mask):
-        B, C, H, W = feature.shape
-        result = []
-
-        for b in range(B):
-            valid_coords = (mask[b, 0] > 0).nonzero(as_tuple=False)
-            if valid_coords.numel() == 0:
-                mean_feat =torch.zeros(C, device=feature.device, dtype=feature.dtype) 
-                result.append(mean_feat)
-                continue
-
-            y, x = valid_coords[:, 0], valid_coords[:, 1]  # (N,)
-            feats = feature[b, :, y, x]  # (C, N)
-            mean_feat = feats.mean(dim=1)  # (C,)
-            result.append(mean_feat)
-
-        return torch.stack(result, dim=0)  # (B, C)
+        # Vectorized pooling preserves positive-pixel and empty-mask behavior.
+        valid_mask = (mask > 0).to(dtype=feature.dtype)
+        sum_features = (feature * valid_mask).sum(dim=(2, 3))
+        counts = valid_mask.sum(dim=(2, 3)).clamp_min(1)
+        return sum_features / counts
 
     
 

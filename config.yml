@@ -1,5 +1,5 @@
 INTERACTIVE_MODELS_PATH: "./weights"
-EXPS_PATH: "../experiments_cc"
+EXPS_PATH: "../experiments"
 
 # Train and Evaluation datasets
 ISAID_PATH: "../datasets/iSAID"

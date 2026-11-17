@@ -37,9 +37,9 @@ class DeepglobeEvaluationDataset(ISDataset):
         image_path = self._images_path / image_name
         mask_path = self._images_path / mask_name
 
-        image = cv2.imread(image_path,cv2.IMREAD_UNCHANGED)
+        image = cv2.imread(str(image_path),cv2.IMREAD_UNCHANGED)
         image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
-        mask = cv2.imread(mask_path,cv2.IMREAD_UNCHANGED)
+        mask = cv2.imread(str(mask_path),cv2.IMREAD_UNCHANGED)
         mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
         mask = (mask>127).astype(np.uint8)
 
