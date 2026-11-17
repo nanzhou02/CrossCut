@@ -92,6 +92,7 @@ def train(model, cfg, model_cfg):
     trainset = ProportionalComposeDataset([
         iSAIDDataset(
         cfg.ISAID_PATH,
+        dota_path=cfg.DOTA_PATH,
         split='train',
         augmentator=train_augmentator,
         keep_background_prob=0.05,
@@ -124,6 +125,7 @@ def train(model, cfg, model_cfg):
     valset = ProportionalComposeDataset([
         iSAIDDataset(
         cfg.ISAID_PATH,
+        dota_path=cfg.DOTA_PATH,
         split='val',
         augmentator=val_augmentator,
         points_sampler=points_sampler,

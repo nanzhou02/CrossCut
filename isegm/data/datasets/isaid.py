@@ -9,13 +9,13 @@ from tqdm import tqdm
 
 
 class iSAIDDataset(ISDataset):
-    def __init__(self, dataset_path, split='train', **kwargs):
+    def __init__(self, dataset_path, split='train', dota_path='../datasets/DOTA-1.0', **kwargs):
         super(iSAIDDataset, self).__init__(**kwargs)
         assert split in {'train', 'val'}
 
         self.dataset_path = Path(dataset_path)
         self.dataset_split = split
-        self._images_path = Path('../datasets/DOTA-1.0') / split / 'images'
+        self._images_path = Path(dota_path) / split / 'images'
         self._sem_mask_path = self.dataset_path / split / 'Semantic_masks' / 'images'
         self.dataset_samples = [x.name for x in sorted(self._sem_mask_path.glob('*.png*'))]
 
@@ -38,13 +38,13 @@ class iSAIDDataset(ISDataset):
 
 
 class iSAIDEvaluationDataset(ISDataset):
-    def __init__(self, dataset_path, split='val', **kwargs):
+    def __init__(self, dataset_path, split='val', dota_path='../datasets/DOTA-1.0', **kwargs):
         super(iSAIDEvaluationDataset, self).__init__(**kwargs)
         assert split in {'train', 'val', 'test'}
 
         self.dataset_path = Path(dataset_path)
         self.dataset_split = split
-        self._images_path = Path('../datasets/DOTA-1.0') / split / 'images'
+        self._images_path = Path(dota_path) / split / 'images'
         self._sem_mask_path = self.dataset_path / split / 'Semantic_masks' / 'images'
         self.dataset_samples = [x.name for x in sorted(self._sem_mask_path.glob('*.png*'))]
         self.dataset_samples = self.get_images_and_ids_list()
